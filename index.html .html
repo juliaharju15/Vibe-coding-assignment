@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Task</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f2f5;
+        }
+
+        #screen-container {
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .hidden { display: none !important; }
+
+        input {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            display: block;
+            width: 200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        button {
+            padding: 10px 25px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover { background-color: #0056b3; }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            background: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="welcome-screen" id="screen-container">
+        <h1>Reaction Time Task</h1>
+        <input type="text" id="participant-id" placeholder="Enter Participant ID">
+        <button id="start-btn">Start Task</button>
+    </div>
+
+    <canvas id="task-canvas" class="hidden"></canvas>
+
+    <div id="results-screen" class="hidden">
+        <h1>Task Complete</h1>
+        <p>Your data has been submitted. Thank you!</p>
+    </div>
+
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyaPHhwcNrAYLlOEBNg3GgBLs3QEWYGPn9cCo0I3VQG4HGB-N1FQzln8mr3TLRZEipVbg/exec";
+        
+        // State variables
+        let participantId = "";
+        let trials = [];
+        let currentTrialCount = 0;
+        const totalTrials = 10;
+        let startTime;
+        let circleX, circleY;
+        const radius = 50;
+
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const canvas = document.getElementById('task-canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const idInput = document.getElementById('participant-id');
+
+        // Initialize Canvas Size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Utility: Generate Random ID
+        function generateRandomID() {
+            return 'P-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        }
+
+        // Logic: Start Task
+        startBtn.addEventListener('click', () => {
+            participantId = idInput.value.trim() || generateRandomID();
+            welcomeScreen.classList.add('hidden');
+            canvas.classList.remove('hidden');
+            resizeCanvas();
+            startTrial();
+        });
+
+        function startTrial() {
+            if (currentTrialCount >= totalTrials) {
+                finishExperiment();
+                return;
+            }
+
+            // Calculate random position ensuring circle stays within bounds
+            circleX = Math.random() * (canvas.width - radius * 2) + radius;
+            circleY = Math.random() * (canvas.height - radius * 2) + radius;
+
+            // Clear and Draw
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            ctx.arc(circleX, circleY, radius, 0, Math.PI * 2);
+            ctx.fillStyle = "#ff4757";
+            ctx.fill();
+            ctx.closePath();
+
+            startTime = performance.now();
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Collision detection
+            const distance = Math.sqrt((mouseX - circleX) ** 2 + (mouseY - circleY) ** 2);
+            
+            if (distance < radius) {
+                const reactionTime = Math.round(performance.now() - startTime);
+                currentTrialCount++;
+                
+                trials.push({
+                    Participant_ID: participantId,
+                    Trial_Number: currentTrialCount,
+                    Reaction_Time: reactionTime
+                });
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 500ms delay before next circle
+                setTimeout(startTrial, 500);
+            }
+        });
+
+        function finishExperiment() {
+            canvas.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+            submitData();
+        }
+
+        async function submitData() {
+            try {
+                // Sending data via POST as requested
+                // Note: Google Apps Script usually requires 'no-cors' mode for simple POSTs
+                // or proper CORS handling on the script side.
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // standard for GAS web apps
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(trials)
+                });
+                console.log("Data sent successfully");
+            } catch (error) {
+                console.error("Submission failed:", error);
+            }
+        }
+    </script>
+</body>
+</html>
